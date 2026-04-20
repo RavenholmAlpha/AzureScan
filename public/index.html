@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AzureScan — AI平台环境指纹自检</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #08080d;
+      --bg-subtle: #0e0e16;
+      --card: #111119;
+      --card-hover: #16161f;
+      --border: #1e1e2e;
+      --border-active: #3b3b5c;
+      --text: #e4e4ed;
+      --text-dim: #6e6e8a;
+      --text-muted: #44445a;
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --accent-glow: rgba(99,102,241,0.12);
+      --green: #22c55e;
+      --green-glow: rgba(34,197,94,0.1);
+      --yellow: #eab308;
+      --yellow-glow: rgba(234,179,8,0.1);
+      --orange: #f97316;
+      --orange-glow: rgba(249,115,22,0.1);
+      --red: #ef4444;
+      --red-glow: rgba(239,68,68,0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* === Background Effect === */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(ellipse at 30% 20%, rgba(99,102,241,0.04) 0%, transparent 50%),
+                  radial-gradient(ellipse at 70% 60%, rgba(139,92,246,0.03) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* === Layout === */
+    .app { position: relative; z-index: 1; }
+
+    .navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,8,13,0.8);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .navbar-brand h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .navbar-brand .version {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      background: var(--accent-glow);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .navbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* === Buttons === */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 20px rgba(99,102,241,0.3);
+    }
+    .btn-primary:hover { background: #5558e6; box-shadow: 0 0 30px rgba(99,102,241,0.4); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--card); color: var(--text); border-color: var(--border-active); }
+
+    .btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+
+    /* === Welcome / Idle State === */
+    .welcome {
+      text-align: center;
+      padding: 80px 20px;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .welcome-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+      filter: drop-shadow(0 0 24px rgba(99,102,241,0.4));
+    }
+
+    .welcome h2 {
+      font-size: 1.8rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #e4e4ed, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .welcome p {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      max-width: 500px;
+      margin: 0 auto 32px;
+    }
+
+    .scan-options {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* === Scanning State === */
+    .scanning {
+      text-align: center;
+      padding: 80px 20px;
+      animation: fadeInUp 0.4s ease-out;
+    }
+
+    .scan-spinner {
+      width: 64px;
+      height: 64px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 24px;
+    }
+
+    .scanning h3 { font-size: 1.2rem; margin-bottom: 8px; }
+    .scanning .scan-module { color: var(--accent-light); font-size: 0.9rem; margin-bottom: 16px; }
+
+    .progress-bar {
+      width: 300px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
+      border-radius: 4px;
+      transition: width 0.5s ease;
+      box-shadow: 0 0 8px rgba(99,102,241,0.5);
+    }
+
+    /* === Results Dashboard === */
+    .dashboard { animation: fadeInUp 0.5s ease-out; }
+
+    .score-hero {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 48px;
+      padding: 40px 0;
+      flex-wrap: wrap;
+    }
+
+    .score-ring-container {
+      position: relative;
+      width: 180px;
+      height: 180px;
+    }
+
+    .score-ring-container svg { transform: rotate(-90deg); }
+    .score-ring-container circle {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+    }
+    .score-ring-container .bg-ring { stroke: var(--border); }
+    .score-ring-container .fg-ring {
+      transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s;
+      filter: drop-shadow(0 0 6px currentColor);
+    }
+
+    .score-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .score-number {
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .score-label-text {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .score-verdict {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      max-width: 420px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      text-align: center;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .stat-card:hover { border-color: var(--border-active); transform: translateY(-2px); }
+    .stat-count { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 0.68rem; color: var(--text-dim); margin-top: 4px; }
+
+    /* System Info Bar */
+    .sys-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 16px 0 24px;
+      font-size: 0.8rem;
+    }
+
+    .sys-bar-item { display: flex; gap: 6px; }
+    .sys-bar-item .lbl { color: var(--text-dim); }
+    .sys-bar-item .val { color: var(--text); font-weight: 500; }
+
+    /* Section Headers */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 24px 0 14px;
+    }
+
+    .section-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Module Cards */
+    .modules-grid { display: flex; flex-direction: column; gap: 10px; }
+
+    .mod-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .mod-card:hover { border-color: var(--border-active); }
+
+    .mod-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .mod-header:hover { background: var(--card-hover); }
+
+    .mod-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .mod-icon { font-size: 1.15rem; }
+
+    .mod-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--accent-glow);
+      color: var(--accent-light);
+    }
+
+    .mod-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mod-risk-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+      color: #fff;
+    }
+
+    .mod-time { font-size: 0.7rem; color: var(--text-muted); }
+    .mod-toggle { color: var(--text-muted); font-size: 0.7rem; transition: transform 0.2s; }
+    .mod-card.collapsed .mod-toggle { transform: rotate(-90deg); }
+    .mod-card.collapsed .mod-body { display: none; }
+
+    .mod-body {
+      padding: 0 18px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .mod-summary {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      padding: 10px 0 8px;
+    }
+
+    /* Items Table */
+    .items-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    .items-tbl th {
+      text-align: left;
+      padding: 7px 8px;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .items-tbl td {
+      padding: 7px 8px;
+      border-bottom: 1px solid rgba(30,30,46,0.5);
+      vertical-align: top;
+    }
+
+    .items-tbl tr:last-child td { border-bottom: none; }
+    .items-tbl tr:hover { background: rgba(99,102,241,0.03); }
+
+    .risk-indicator {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    .val-code {
+      font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.73rem;
+      background: rgba(99,102,241,0.07);
+      padding: 1px 5px;
+      border-radius: 3px;
+      word-break: break-all;
+      max-width: 220px;
+      display: inline-block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fix-text { color: var(--accent-light); font-size: 0.73rem; }
+    .no-fix-text { color: var(--text-muted); }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--bg-subtle);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      border: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      padding: 7px 16px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active { background: var(--accent); color: #fff; }
+    .tab-btn:hover:not(.active) { color: var(--text); background: var(--card); }
+
+    /* History Panel */
+    .history-panel { animation: fadeInUp 0.5s ease-out; }
+
+    .snapshot-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .snapshot-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      transition: border-color 0.2s;
+    }
+
+    .snapshot-item:hover { border-color: var(--border-active); }
+    .snapshot-time { font-size: 0.85rem; font-weight: 500; }
+    .snapshot-score { font-size: 0.85rem; font-weight: 700; }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-dim);
+    }
+
+    .empty-state-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state p { font-size: 0.9rem; }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container { padding: 16px; }
+      .navbar { padding: 12px 16px; }
+      .score-hero { gap: 24px; }
+      .stat-cards { grid-template-columns: repeat(2, 1fr); }
+      .scan-options { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="navbar-brand">
+        <span style="font-size:1.3rem">🛡️</span>
+        <h1>AzureScan</h1>
+        <span class="version" id="versionBadge">v3.0.0</span>
+      </div>
+      <div class="navbar-actions">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="scan" onclick="switchTab('scan')">扫描</button>
+          <button class="tab-btn" data-tab="history" onclick="switchTab('history')">历史</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+      <!-- Tab: Scan -->
+      <div id="tab-scan">
+        <!-- Welcome / Idle -->
+        <div id="state-idle" class="welcome">
+          <div class="welcome-icon">🛡️</div>
+          <h2>环境安全自检</h2>
+          <p>一键检测本地环境中可能被 AI 平台风控系统识别的指纹和遥测信号，帮你提前发现并修复风险。</p>
+          <div class="scan-options">
+            <button class="btn btn-primary" id="btn-scan-quick" onclick="startScan(true)">
+              ⚡ 快速扫描
+            </button>
+            <button class="btn btn-ghost" id="btn-scan-full" onclick="startScan(false)">
+              🔍 完整扫描（含浏览器指纹）
+            </button>
+          </div>
+        </div>
+
+        <!-- Scanning Progress -->
+        <div id="state-scanning" class="scanning" style="display:none">
+          <div class="scan-spinner"></div>
+          <h3>正在扫描环境...</h3>
+          <div class="scan-module" id="scanning-module">初始化...</div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+          </div>
+          <p style="color:var(--text-muted);font-size:0.78rem;margin-top:12px" id="scanning-percent">0%</p>
+        </div>
+
+        <!-- Results Dashboard -->
+        <div id="state-results" class="dashboard" style="display:none">
+          <!-- Score Ring + Stats -->
+          <div class="score-hero">
+            <div class="score-ring-container">
+              <svg width="180" height="180" viewBox="0 0 180 180">
+                <circle class="bg-ring" cx="90" cy="90" r="80"/>
+                <circle class="fg-ring" id="score-ring" cx="90" cy="90" r="80"
+                  stroke-dasharray="502.65"
+                  stroke-dashoffset="502.65"/>
+              </svg>
+              <div class="score-center">
+                <div class="score-number" id="score-number">0</div>
+                <div class="score-label-text">风险评分</div>
+                <div class="score-verdict" id="score-verdict">—</div>
+              </div>
+            </div>
+            <div>
+              <div class="stat-cards">
+                <div class="stat-card">
+                  <div class="stat-count" style="color:var(--green)" id="stat-safe">0</div>
+                  <div class="stat-label">安全</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-count" style="color:var(--yellow)" id="stat-caution">0</div>
+                  <div class="stat-label">注意</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-count" style="color:var(--orange)" id="stat-high">0</div>
+                  <div class="stat-label">高风险</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-count" style="color:var(--red)" id="stat-critical">0</div>
+                  <div class="stat-label">严重</div>
+                </div>
+              </div>
+              <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" onclick="startScan(true)">🔄 重新扫描</button>
+                <button class="btn btn-ghost btn-sm" onclick="openHtmlReport()">📄 完整报告</button>
+                <button class="btn btn-ghost btn-sm" onclick="exportJSON()">💾 导出 JSON</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- System Info -->
+          <div class="sys-bar" id="sys-bar"></div>
+
+          <!-- Section: High Risk Items -->
+          <div id="high-risk-section" style="display:none">
+            <div class="section-header">
+              <h2>🚨 高风险项</h2>
+            </div>
+            <div id="high-risk-items"></div>
+          </div>
+
+          <!-- Section: Module Details -->
+          <div class="section-header">
+            <h2>📋 检测详情</h2>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="expandAll()">展开全部</button>
+              <button class="btn btn-ghost btn-sm" onclick="collapseAll()">折叠全部</button>
+            </div>
+          </div>
+          <div class="modules-grid" id="modules-grid"></div>
+
+          <div style="text-align:center;padding:40px 0;color:var(--text-muted);font-size:0.78rem">
+            AzureScan — 纯本地运行，无数据上传
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: History -->
+      <div id="tab-history" style="display:none" class="history-panel">
+        <div class="section-header">
+          <h2>📸 历史快照</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadSnapshots()">刷新</button>
+        </div>
+        <div id="snapshots-list">
+          <div class="empty-state">
+            <div class="empty-state-icon">📸</div>
+            <p>暂无历史快照</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // State
+    // ============================================================
+    let currentReport = null;
+    let pollTimer = null;
+
+    // ============================================================
+    // Tab Switching
+    // ============================================================
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`.tab-btn[data-tab="${tab}"]`).classList.add('active');
+      document.getElementById('tab-scan').style.display = tab === 'scan' ? '' : 'none';
+      document.getElementById('tab-history').style.display = tab === 'history' ? '' : 'none';
+      if (tab === 'history') loadSnapshots();
+    }
+
+    // ============================================================
+    // Scan Control
+    // ============================================================
+    async function startScan(skipBrowser) {
+      showState('scanning');
+      
+      try {
+        await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skipBrowser }),
+        });
+        
+        // Start polling
+        pollProgress();
+      } catch (err) {
+        alert('扫描启动失败: ' + err.message);
+        showState('idle');
+      }
+    }
+
+    function pollProgress() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const resp = await fetch('/api/progress');
+          const data = await resp.json();
+          
+          if (data.data.progress) {
+            const p = data.data.progress;
+            document.getElementById('scanning-module').textContent = p.currentModule;
+            document.getElementById('progress-fill').style.width = p.percentage + '%';
+            document.getElementById('scanning-percent').textContent = p.percentage + '%';
+            
+            if (p.status === 'completed') {
+              clearInterval(pollTimer);
+              pollTimer = null;
+              await loadReport();
+            } else if (p.status === 'error') {
+              clearInterval(pollTimer);
+              pollTimer = null;
+              alert('扫描出错');
+              showState('idle');
+            }
+          }
+          
+          if (!data.data.running && data.data.progress?.status === 'completed') {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            await loadReport();
+          }
+        } catch {}
+      }, 800);
+    }
+
+    async function loadReport() {
+      try {
+        const resp = await fetch('/api/report');
+        const data = await resp.json();
+        if (data.success) {
+          currentReport = data.data;
+          renderDashboard(currentReport);
+          showState('results');
+        }
+      } catch {}
+    }
+
+    // ============================================================
+    // UI State
+    // ============================================================
+    function showState(state) {
+      document.getElementById('state-idle').style.display = state === 'idle' ? '' : 'none';
+      document.getElementById('state-scanning').style.display = state === 'scanning' ? '' : 'none';
+      document.getElementById('state-results').style.display = state === 'results' ? '' : 'none';
+    }
+
+    // ============================================================
+    // Render Dashboard
+    // ============================================================
+    function renderDashboard(report) {
+      // Score Ring
+      const circumference = 2 * Math.PI * 80; // 502.65
+      const offset = circumference - (circumference * report.totalRisk / 100);
+      const ring = document.getElementById('score-ring');
+      const color = getRiskColor(report.riskLevel);
+      ring.style.stroke = color;
+      ring.style.strokeDashoffset = offset;
+      
+      document.getElementById('score-number').textContent = report.totalRisk;
+      document.getElementById('score-number').style.color = color;
+      document.getElementById('score-verdict').textContent = getRiskLabel(report.riskLevel);
+      document.getElementById('score-verdict').style.color = color;
+
+      // Stats
+      document.getElementById('stat-safe').textContent = report.stats.safeCount;
+      document.getElementById('stat-caution').textContent = report.stats.cautionCount;
+      document.getElementById('stat-high').textContent = report.stats.highCount;
+      document.getElementById('stat-critical').textContent = report.stats.criticalCount;
+
+      // System Info
+      const sys = report.systemSummary;
+      document.getElementById('sys-bar').innerHTML = [
+        { l: '操作系统', v: sys.os },
+        { l: '主机名', v: sys.hostname },
+        { l: 'CPU', v: sys.cpu },
+        { l: 'GPU', v: sys.gpu },
+        { l: '内存', v: sys.ram },
+        { l: 'IP', v: sys.ip },
+        { l: '时区', v: sys.timezone },
+        { l: '语言', v: sys.locale },
+      ].map(i => `<div class="sys-bar-item"><span class="lbl">${i.l}:</span><span class="val">${esc(String(i.v))}</span></div>`).join('');
+
+      // High Risk Items
+      const highRiskItems = report.allItems.filter(i => i.risk >= 6);
+      const hrSection = document.getElementById('high-risk-section');
+      if (highRiskItems.length > 0) {
+        hrSection.style.display = '';
+        document.getElementById('high-risk-items').innerHTML = `
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+            <table class="items-tbl">
+              <thead><tr><th>检测项</th><th>风险</th><th>说明</th><th>修复建议</th></tr></thead>
+              <tbody>
+                ${highRiskItems.map(item => `
+                  <tr>
+                    <td><span class="risk-indicator" style="background:${getRiskColor(item.level)}"></span>${esc(item.name)}</td>
+                    <td style="color:${getRiskColor(item.level)};font-weight:700">${item.risk}/10</td>
+                    <td>${esc(item.description)}</td>
+                    <td class="fix-text">${item.fix ? esc(item.fix) : '<span class="no-fix-text">—</span>'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      } else {
+        hrSection.style.display = 'none';
+      }
+
+      // Modules
+      const icons = {
+        network: '🌐', ip_transport: '📡', browser: '🔍', system: '💻',
+        virtualization: '🖥️', consistency: '🔗', claude_specific: '🤖',
+        behavioral: '👁️', advanced: '🚀',
+      };
+
+      document.getElementById('modules-grid').innerHTML = report.modules.map(mod => {
+        const modColor = getRiskColor(getRiskLevelFromScore(mod.risk));
+        const collapsed = mod.risk === 0 ? 'collapsed' : '';
+        const itemsHtml = mod.items.map(item => {
+          const iColor = getRiskColor(item.level);
+          const valStr = typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value);
+          return `
+            <tr>
+              <td><span class="risk-indicator" style="background:${iColor}"></span>${esc(item.name)}</td>
+              <td><span class="val-code" title="${esc(valStr)}">${esc(valStr.substring(0, 80))}</span></td>
+              <td style="color:${iColor};font-weight:600">${item.risk}/10</td>
+              <td>${esc(item.description.substring(0, 80))}</td>
+              <td class="fix-text">${item.fix ? esc(item.fix) : '<span class="no-fix-text">—</span>'}</td>
+            </tr>`;
+        }).join('');
+
+        return `
+          <div class="mod-card ${collapsed}">
+            <div class="mod-header" onclick="this.parentElement.classList.toggle('collapsed')">
+              <div class="mod-title">
+                <span class="mod-icon">${icons[mod.category] || '📋'}</span>
+                <span>${esc(mod.moduleName)}</span>
+                <span class="mod-badge">${mod.items.length} 项</span>
+              </div>
+              <div class="mod-right">
+                <span class="mod-risk-badge" style="background:${modColor}">${mod.risk}%</span>
+                <span class="mod-time">${mod.duration}ms</span>
+                <span class="mod-toggle">▼</span>
+              </div>
+            </div>
+            <div class="mod-body">
+              <div class="mod-summary">${esc(mod.summary)}</div>
+              <table class="items-tbl">
+                <thead><tr><th>检测项</th><th>值</th><th>风险</th><th>说明</th><th>修复</th></tr></thead>
+                <tbody>${itemsHtml}</tbody>
+              </table>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // ============================================================
+    // History
+    // ============================================================
+    async function loadSnapshots() {
+      try {
+        const resp = await fetch('/api/snapshots');
+        const data = await resp.json();
+        if (data.success && data.data.length > 0) {
+          document.getElementById('snapshots-list').innerHTML = `<div class="snapshot-list">
+            ${data.data.map(s => {
+              const color = getRiskColor(getRiskLevelFromScore(s.totalRisk));
+              return `
+                <div class="snapshot-item">
+                  <div>
+                    <div class="snapshot-time">${new Date(s.timestamp).toLocaleString('zh-CN')}</div>
+                    <div style="font-size:0.72rem;color:var(--text-muted)">${s.filename}</div>
+                  </div>
+                  <div class="snapshot-score" style="color:${color}">${s.totalRisk}/100</div>
+                </div>`;
+            }).join('')}
+          </div>`;
+        } else {
+          document.getElementById('snapshots-list').innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">📸</div>
+              <p>暂无历史快照，完成一次扫描后将自动保存</p>
+            </div>`;
+        }
+      } catch {}
+    }
+
+    // ============================================================
+    // Utils
+    // ============================================================
+    function getRiskColor(level) {
+      const colors = { safe: '#22c55e', caution: '#eab308', high: '#f97316', critical: '#ef4444' };
+      return colors[level] || '#6e6e8a';
+    }
+
+    function getRiskLabel(level) {
+      const labels = { safe: '极安全', caution: '建议优化', high: '高风险', critical: '几乎必封' };
+      return labels[level] || '未知';
+    }
+
+    function getRiskLevelFromScore(score) {
+      if (score <= 25) return 'safe';
+      if (score <= 50) return 'caution';
+      if (score <= 75) return 'high';
+      return 'critical';
+    }
+
+    function esc(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function expandAll() {
+      document.querySelectorAll('.mod-card').forEach(c => c.classList.remove('collapsed'));
+    }
+
+    function collapseAll() {
+      document.querySelectorAll('.mod-card').forEach(c => c.classList.add('collapsed'));
+    }
+
+    function openHtmlReport() {
+      window.open('/api/report/html', '_blank');
+    }
+
+    function exportJSON() {
+      if (!currentReport) return;
+      const blob = new Blob([JSON.stringify(currentReport, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `azurescan_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ============================================================
+    // Init: check if there's an existing report
+    // ============================================================
+    (async function init() {
+      try {
+        const resp = await fetch('/api/status');
+        const data = await resp.json();
+        document.getElementById('versionBadge').textContent = 'v' + data.data.version;
+
+        if (data.data.scanning) {
+          showState('scanning');
+          pollProgress();
+        } else if (data.data.hasLastReport) {
+          await loadReport();
+        }
+      } catch {}
+    })();
+  </script>
+</body>
+</html>

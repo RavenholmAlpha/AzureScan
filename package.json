@@ -1,0 +1,36 @@
+{
+  "name": "azurescan",
+  "version": "3.0.0",
+  "description": "AI平台环境指纹自检工具 - 本地环境风控自查",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/main.ts",
+    "scan": "ts-node src/main.ts --full --html",
+    "gui": "ts-node src/server.ts",
+    "start": "node dist/main.js"
+  },
+  "keywords": ["fingerprint", "security", "environment", "scan"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "dayjs": "^1.11.13",
+    "ejs": "^3.1.10",
+    "express": "^4.21.0",
+    "fs-extra": "^11.3.0",
+    "marked": "^15.0.0",
+    "open": "^8.4.2",
+    "ora": "^5.4.1",
+    "systeminformation": "^5.25.0"
+  },
+  "devDependencies": {
+    "@types/ejs": "^3.1.5",
+    "@types/express": "^4.17.21",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.0"
+  }
+}

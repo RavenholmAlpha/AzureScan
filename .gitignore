@@ -1,0 +1,9 @@
+node_modules/
+dist/
+fingerprints/
+reports/
+.cache/
+*.js
+*.d.ts
+*.js.map
+!public/**/*.js
